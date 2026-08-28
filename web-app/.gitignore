@@ -1,0 +1,16 @@
+# SvelteKit standard ignores (scoped to this app folder)
+/node_modules/
+/build/
+/.svelte-kit/
+/.vite/
+/package/
+/.vercel/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Vite temp files
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*

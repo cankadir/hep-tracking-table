@@ -1,0 +1,8 @@
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Environment files: never commit secrets. Copy .env.example to .env locally.
+.env
+.env.*
+!.env.example
