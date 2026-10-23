@@ -4,7 +4,7 @@ on:
   workflow_dispatch:        # manual "Run workflow" button on the Actions tab. Cron added later.
 
 permissions:
-  contents: write           # lets the runner commit the JSON/xlsx back to the repo
+  contents: write           # lets the runner commit the JSON back to the repo
 
 concurrency:
   group: sync-sheet         # never run two syncs at once
@@ -21,16 +21,21 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: py/requirements.txt
 
-      - name: Fetch sheet and build JSON + xlsx
-        run: python py/sync_sheet.py
+      - name: Install dependencies
+        run: pip install -r py/requirements.txt
+
+      - name: Fetch sheet and build JSON
+        run: python py/sync_sheet_format.py
 
       - name: Commit if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git switch -C "$GITHUB_REF_NAME"
-          git add data/hep-tracking.json data/hep-tracking.xlsx
+          git add data/hep-tracking.json
           if git diff --cached --quiet; then
             echo "No changes. Nothing to commit."
           else
