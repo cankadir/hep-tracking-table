@@ -11,13 +11,29 @@ Static SvelteKit site (`web-app/`) that renders one table from `data/hep-trackin
 - **Empty cells are JSON `null`, not `NaN`.** `NaN` is invalid JSON and would reach the browser.
 - **The transform is the notebook, unchanged.** No row filtering, no extra cleaning, no schema validation. Only trailing whitespace stripping on the 6 group columns, as in `py/data_transform.ipynb`.
 - `data/hep-tracking.xlsx` and the zip/XML rich-text parser were dropped (unused by the web app, not viewable on GitHub).
+- **The JSON stays flat; the hierarchy is built in the browser.** `web-app/src/lib/group.js` turns the 120 rows into `Goal > Objective > Action > activities` in one pass per level using nested `Map`s. No lodash (a dependency for ~20 lines). Map insertion order preserves sheet order, so no sorting.
+- **Group keys include code and text**, e.g. `JSON.stringify([code, desc, subtitle])` for objectives. Codes alone repeat across goals (`A` appears in all 5) and could theoretically carry a different label; composite keys make that impossible. The objective key includes `Subtitle` because the hierarchy defines the objective by all three fields.
+- **`Subtitle` is 1:1 with `Objective Code + Objective Desc`** in the current sheet (19 objectives, no conflicts), so it is stored once per objective, not once per row.
+- `$lib/group.js` is the only place that knows the flat column names. The page consumes only the grouped shape.
+- **`$lib/store.js` holds only `DATA_URL`.** The `rows` writable was removed with the stale 4-column page; `+page.js` returns rows from `load` and the page uses `$derived`.
+- Status classes (`completed`, `in-progress`, `not-started`, `blocked`, `na`) come from `$lib/status.js` and are styled with scoped CSS; no `:global` needed because the span keeps its static `status` class.
+- **Accordion pattern comes from `thrive-data-portal`'s `SectorSidebar.svelte`, not `LegendAccordion.svelte`.** `LegendAccordion` is misleadingly named: it is a legend + metadata panel with no toggle. The real pattern is a full-width button header with the `+` icon rotating 45° to `×`, `transition:slide` on the body, and `#d6d6ce` when open. Ported as `src/lib/components/Accordion.svelte` (`title`, `code`, `subtitle`, `level`, `open` bindable, `children`).
+- The accordion wraps its button in `svelte:element this={\`h${level}\`}` so goals are real `h2`s and objectives `h3`s while the click target stays a button.
+- Goals and objectives are accordions; actions are always-visible headings over their table. Two accordion levels, one click to a table.
+- **All accordions start closed** (client request). The page passes no `open` prop; each accordion uses its own `$bindable(false)`. Passing a plain expression to that prop would seed the child's local state, but the parent never tracks later toggles.
+- **Closed accordions unmount their content** (`{#if}`), so first paint contains 20 of 120 rows and Ctrl+F only sees open sections. Accepted: the slide animation was the point. Switch to `hidden` if searchability becomes a requirement.
+- **Blank `Status` stays `null` in the Python output.** The client asked for "NA" on screen, but the fill is a *display* concern: `statusName(status)` in `src/lib/status.js` maps null → `"NA"`. Do not add `fillna("NA")` to `py/sync_sheet_format.py`; the user explicitly reverted that.
+- **`src/lib/status.js` is the single status vocabulary**: name, CSS class, and chart color for `Completed`, `In progress`, `Not started`, `Blocked`, `NA`. Badges, grouping, and the bar all read from it.
+- **d3 is a dependency now, but only `d3-scale`.** The stacked bar needs `scaleLinear` for percentages; everything else is Svelte markup. No `d3.select`/`.enter()`/DOM mutation, and no `{@html}` — the SVG is written declaratively. Add more d3 subpackages only when a chart actually needs them.
 
 ## Conventions
 
+- **Do not run `npm run build` on every change.** The user asked for this explicitly; the build takes ~60s. Iterate with the autofixer and the running dev server. Build only when asked or before deploy.
 - Python: stdlib where possible; pandas pinned in `py/requirements.txt`.
 - CI: `actions/setup-python` with `cache: pip`; no duplicate installs.
 
 ## Open items
 
 - `py/sync_sheet.py` is the old xlsx-based script, superseded by `py/sync_sheet_format.py`. Delete once the new one is trusted.
-- `web-app/src/routes/+page.svelte` still expects `Organization / Date / Sector / Explanation` and renders via `{@html}`; it needs the new 9-column schema.
+- `data/hep-tracking.xlsx` and `web-app/README.md` are deleted in the working tree but not committed.
+- `+page.js` fetches the published GitHub raw URL, not the local `data/` file. That means a local edit to the JSON is not visible in the dev server until pushed.
